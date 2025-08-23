@@ -57,3 +57,6 @@ coverage.xml
 
 # Project specific
 .python-version
+
+# Datasets
+datasets/
