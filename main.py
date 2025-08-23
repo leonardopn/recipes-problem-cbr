@@ -21,13 +21,23 @@ def load_data_set() -> pd.DataFrame:
         exit()
 
 
+# 2. Limpeza e preparação dos dados (uma etapa inicial)
+# Vamos remover receitas que não têm ingredientes listados
+def clean_data(df: pd.DataFrame) -> pd.DataFrame:
+    df.dropna(subset=["Cleaned_Ingredients"], inplace=True)
+    # Para este exemplo, vamos trabalhar com uma amostra menor para ser mais rápido
+    df_sample = df.sample(n=5000, random_state=42)
+    return df_sample
+
+
 # ===================================== APP ===================================== #
 
 
 def main() -> None:
     print(f"{'=' * 80}Iniciando o processamento...{'=' * 80}\n")
 
-    load_data_set()
+    df = load_data_set()
+    df = clean_data(df)
 
     print(f"\n{'=' * 80} Fim do processamento {'=' * 80}\n")
 
