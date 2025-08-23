@@ -7,7 +7,10 @@ requires-python = ">=3.12"
 dependencies = ["cbrkit>=0.28.2", "pandas>=2.3.2"]
 
 [dependency-groups]
-dev = ["pandas-stubs>=2.3.0.250703"]
+dev = [
+    "pandas-stubs>=2.3.0.250703",
+    "watchfiles>=1.1.0",
+]
 
 [tool.pyright]
 reportMissingTypeStubs = false

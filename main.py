@@ -1,4 +1,6 @@
 import pandas as pd
+import asyncio
+from watchfiles import awatch, run_process
 
 
 DATASET_FILE = "./datasets/recipes.csv"
@@ -23,8 +25,12 @@ def load_data_set() -> pd.DataFrame:
 
 
 def main() -> None:
+    print(f"{'=' * 80}Iniciando o processamento...{'=' * 80}\n")
+
     load_data_set()
+
+    print(f"\n{'=' * 80} Fim do processamento {'=' * 80}\n")
 
 
 if __name__ == "__main__":
-    main()
+    run_process("./", target=main)
