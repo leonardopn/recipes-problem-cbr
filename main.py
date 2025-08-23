@@ -1,9 +1,8 @@
 import pandas as pd
 from watchfiles import run_process
 import cbrkit
-import cbrkit.loaders  # Módulo para carregar dados
-import cbrkit.sim  # Módulo para funções de similaridade
-import ast  # Para converter a string de lista para uma lista real
+import cbrkit.loaders
+import ast
 
 DATASET_FILE = "./datasets/recipes.csv"
 
