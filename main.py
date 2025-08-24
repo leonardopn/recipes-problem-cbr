@@ -25,7 +25,7 @@ class CaseResult:
         self.similarity = similarity
 
     def to_string(self) -> str:
-        return f"{self.case['Title']} (ID: {self.case['Id']}, Similaridade: {self.similarity*100}%)"
+        return f"{self.case['Title']} (ID: {self.case['Id']}, Similaridade: {(self.similarity*100):.2f}%)"
 
 
 # 1. Carregar o dataset
