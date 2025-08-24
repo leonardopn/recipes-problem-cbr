@@ -6,7 +6,12 @@ import cbrkit
 import cbrkit.loaders
 import ast
 
+# ===================================== CONSTANTES ===================================== #
+
 DATASET_FILE = "./datasets/recipes.csv"
+RESULT_LIMIT = 10
+
+# ===================================== TYPES ===================================== #
 
 
 class Recipe(TypedDict):
@@ -28,6 +33,9 @@ class CaseResult:
         return f"{self.case['Title']} (ID: {self.case['Id']}, Similaridade: {(self.similarity*100):.2f}%)"
 
 
+# ===================================== OPERAÇÕES ===================================== #
+
+
 # 1. Carregar o dataset
 def load_data_set() -> pd.DataFrame:
     try:
@@ -42,69 +50,79 @@ def load_data_set() -> pd.DataFrame:
 
 # 2. Limpeza e preparação dos dados
 def clean_data(df: pd.DataFrame) -> pd.DataFrame:
+    # Removendo linhas com valores nulos nas colunas essenciais
     df.dropna(subset=["Cleaned_Ingredients"], inplace=True)
+    df.dropna(subset=["Title"], inplace=True)
+
     # Convertendo a string de ingredientes em uma lista de verdade
     # Isso é importante para que a função de similaridade funcione corretamente
     df["Cleaned_Ingredients_List"] = df["Cleaned_Ingredients"].apply(
-        lambda x: set(ast.literal_eval(x))
+        lambda x: " ".join(ast.literal_eval(x))
     )
-    df_sample = df.sample(n=5000, random_state=42)
-    return df_sample
+
+    return df
 
 
 # 3. Mapear o DataFrame para a estrutura do cbrkit
 def map_dataframe_to_casebase(df: pd.DataFrame) -> cbrkit.loaders.pandas:
     # Mapeamos as colunas do DataFrame para os conceitos de "problema" e "solução"
     # O loader do cbrkit cuida da criação da base de casos
-    casebase = cbrkit.loaders.pandas(df)
-    return casebase
+    return cbrkit.loaders.pandas(df)
 
 
 # 4. Executar a recuperação de casos
 def perform_retrieval(casebase: cbrkit.loaders.pandas) -> None:
-    # 1. Definir a função de similaridade local para os ingredientes
-    # Usaremos a similaridade de Jaccard, ideal para comparar conjuntos.
-    ingredients_similarity = cbrkit.sim.collections.jaccard[set[str]]()
+    def custom_ingredient_similarity(x: str, y: set[str]) -> float:
+        if not y:
+            return 0.0
 
-    # 2. Definir a similaridade global
-    # Como nosso "problema" tem apenas um atributo ('Cleaned_Ingredients_List'),
-    # a similaridade global será a mesma que a local.
-    # O `attribute_value` nos ajuda a aplicar a função à chave correta.
+        # Conta quantos ingredientes da busca são encontrados como substrings na string da receita
+        match_count = sum(1 for ingredient in y if ingredient in x)
+
+        # A similaridade é a proporção de ingredientes encontrados
+        return match_count / len(y)
+
     similarity_func = cbrkit.sim.attribute_value(
-        attributes={"Cleaned_Ingredients_List": ingredients_similarity},
+        attributes={"Cleaned_Ingredients_List": custom_ingredient_similarity},
         aggregator=cbrkit.sim.aggregator(pooling="mean"),
     )
 
-    # 3. Construir o recuperador (retriever)
-    # Ele usará nossa função de similaridade e nos retornará os 5 casos mais similares.
     retriever = cbrkit.retrieval.dropout(
         cbrkit.retrieval.build(
             similarity_func=similarity_func,
         ),
-        limit=5,
+        limit=RESULT_LIMIT,
     )
 
-    # 4. Criar uma consulta (query)
-    # Vamos simular um usuário que tem frango, cebola, alho e tomate.
-    query_ingredients = {"onion", "garlic", "chicken", "tomato"}
+    # query_ingredients = {"chicken", "onion", "garlic", "tomato"}
+
+    query_ingredients = {
+        "flaked coconut",
+        "sugar",
+        "pineapple",
+        "confectioner's sugar",
+        "egg yolks",
+    }
+
     query = {"Cleaned_Ingredients_List": query_ingredients}
     print(f"Buscando receitas com os ingredientes: {query_ingredients}\n")
 
-    # 5. Executar a recuperação
     retrieved_cases = cbrkit.retrieval.apply_query(
         casebase=casebase, query=query, retrievers=retriever
     )
 
-    # 6. Exibir os resultados (Reúso da Solução)
-    print("Top 5 receitas recomendadas:")
+    print(f"Top {RESULT_LIMIT} receitas recomendadas:")
     result = retrieved_cases.final_step
+    matched_cases = result.casebase.items()
+    position = 1
 
-    for case in result.casebase.items():
+    for case in matched_cases:
         case_result = CaseResult(
             case=Recipe(**case[1]), similarity=result.similarities[case[0]].value
         )
 
-        print(case_result.to_string())
+        print(position, case_result.to_string())
+        position += 1
 
 
 # ===================================== APP ===================================== #
@@ -122,6 +140,7 @@ def main() -> None:
     casebase = map_dataframe_to_casebase(df_cleaned)
     print("Base de casos criada com sucesso!")
     print(f"Número de casos na base: {len(casebase)}")
+    print(f"Um caso de exemplo seria: {list(casebase.items())[0][1]}")
 
     # Passo 4: Executar a recuperação de casos
     perform_retrieval(casebase)
