@@ -6,7 +6,7 @@ import cbrkit
 import cbrkit.loaders
 import ast
 
-from sim_functions.custom_ingrecient_similarity import custom_ingredient_similarity
+from sim_functions.custom_ingredient_similarity import custom_ingredient_similarity
 
 # ===================================== CONSTANTES ===================================== #
 
