@@ -109,6 +109,68 @@ def perform_retrieval(case_base: cbrkit.loaders.pandas) -> None:
         position += 1
 
 
+# 5. Avaliar o sistema com o método Leave-One-Out
+def evaluate_with_leave_one_out(
+    casebase: cbrkit.loaders.pandas, sample_size: int = 100
+) -> None:
+    print(
+        f"\n{'=' * 40} Iniciando Avaliação Leave-One-Out (amostra de {sample_size} casos) {'=' * 40}\n"
+    )
+
+    similarity_func = cbrkit.sim.attribute_value(
+        attributes={"Cleaned_Ingredients_List": custom_ingredient_similarity},
+        aggregator=cbrkit.sim.aggregator(pooling="mean"),
+    )
+
+    correct_predictions = 0
+
+    # Para não demorar muito, vamos testar com uma amostra da base de casos
+    # Pega os primeiros `sample_size` IDs da base de casos para o teste
+    case_ids_to_test = list(casebase.keys())[:sample_size]
+
+    for i, case_id_to_hold_out in enumerate(case_ids_to_test):
+        print(f"Testando caso {i+1}/{sample_size}...")
+
+        # a. Separa o caso de teste (holdout)
+        holdout_case = casebase[case_id_to_hold_out]
+        print(holdout_case)
+        query = holdout_case["problem"]
+        correct_solution_title = holdout_case["solution"]["Title"]
+
+        # b. Cria a base de casos para o teste (todos exceto o holdout)
+        test_casebase = {
+            key: value for key, value in casebase.items() if key != case_id_to_hold_out
+        }
+
+        # c. Constrói o recuperador para a base de teste, buscando apenas o caso mais similar
+        retriever = cbrkit.retrieval.build(
+            casebase=test_casebase,
+            similarity_func=similarity_func,
+            limit=1,
+        )
+
+        # d. Executa a recuperação
+        retrieved_result = retriever(query)
+
+        # e. Compara a solução
+        if retrieved_result:
+            retrieved_case_id = next(iter(retrieved_result))
+            retrieved_solution_title = retrieved_result[retrieved_case_id]["solution"][
+                "Title"
+            ]
+
+            if retrieved_solution_title == correct_solution_title:
+                correct_predictions += 1
+
+    # f. Calcula e exibe a acurácia final
+    accuracy = (correct_predictions / sample_size) * 100
+    print("\n-------------------- Resultado da Avaliação --------------------")
+    print(f"Casos testados: {sample_size}")
+    print(f"Previsões corretas: {correct_predictions}")
+    print(f"Acurácia do sistema: {accuracy:.2f}%")
+    print("----------------------------------------------------------------")
+
+
 # ===================================== APP ===================================== #
 
 
@@ -128,6 +190,9 @@ def main() -> None:
 
     # Passo 4: Executar a recuperação de casos
     perform_retrieval(case_base)
+
+    # Passo 5: Avaliar o sistema com Leave-One-Out
+    evaluate_with_leave_one_out(case_base, sample_size=200)
 
     print(f"\n{'=' * 40} Fim do processamento {'=' * 40}\n")
 
