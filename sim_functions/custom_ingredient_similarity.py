@@ -1,28 +1,25 @@
+from helpers.clean_data import normalize_ingredients
+
+
 def custom_ingredient_similarity(case: set[str], ingredients: set[str]) -> float:
-    if len(ingredients) == 0 or len(case) == 0:
-        return 0
+    """
+    Calcula a similaridade entre dois conjuntos de ingredientes
+    usando o Índice de Jaccard.
+    """
+    # Normaliza os dois conjuntos para garantir uma comparação justa
+    norm_case = normalize_ingredients(case)
+    norm_user = normalize_ingredients(ingredients)
 
-    points = 0
-    faults = 0
+    if not norm_case or not norm_user:
+        return 0.0
 
-    # Primeiro, verificar se algum dos ingredientes estão dentro da receita caso
-    for ingredient in ingredients:
-        joined_case_str = " ".join(case)
-        if ingredient in joined_case_str:
-            points += 1
+    # Calcula a intersecção (ingredientes em comum)
+    intersection = norm_case.intersection(norm_user)
 
-    # Depois, se algum ingrediente do caso base não estiver na lista de ingredientes, adicionamos uma falta
-    for ingredient in case:
-        # Precisamos tokenizar pois os ingredientes nos casos estão da seguinte forma: "uma fatia de pão"
-        # ou seja, se dentro da sentença, nenhuma das palavras estiver na lista de ingredientes, adicionamos uma falta
-        # Fazemos isso, pois entendemos que se a receita precisar de mais itens, ela pode não funcionar corretamente
-        tokens = ingredient.split()
-        is_in = False
-        for token in tokens:
-            if token in ingredients:
-                is_in = True
-                break
-        if not is_in:
-            faults += 1
+    # Calcula a união (todos os ingredientes únicos somados)
+    union = norm_case.union(norm_user)
 
-    return points / (len(ingredients) + faults)
+    if len(union) == 0:
+        return 0.0
+
+    return len(intersection) / len(union)
