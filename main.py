@@ -4,14 +4,15 @@ import pandas as pd
 from watchfiles import run_process
 import cbrkit
 import cbrkit.loaders
-import ast
-
+from constant.result_limit import RESULT_LIMIT
+from evaluation.evaluate_with_leave_one_out import evaluate_with_leave_one_out
+from helpers.clean_data import clean_data
 from sim_functions.custom_ingredient_similarity import custom_ingredient_similarity
+
 
 # ===================================== CONSTANTES ===================================== #
 
 DATASET_FILE = "./datasets/recipes.csv"
-RESULT_LIMIT = 10
 
 # ===================================== TYPES ===================================== #
 
@@ -22,8 +23,8 @@ class Recipe(TypedDict):
     Ingredients: list[str]
     Instructions: str
     Image_Name: str
-    Cleaned_Ingredients: str
-    Cleaned_Ingredients_List: set[str]
+    Cleaned_Ingredients: list[str]
+    Literal_Ingredients_List: set[str]
 
 
 class CaseResult:
@@ -50,32 +51,17 @@ def load_data_set() -> pd.DataFrame:
         exit()
 
 
-# 2. Limpeza e preparação dos dados
-def clean_data(df: pd.DataFrame) -> pd.DataFrame:
-    # Removendo linhas com valores nulos nas colunas essenciais
-    df.dropna(subset=["Cleaned_Ingredients"], inplace=True)
-    df.dropna(subset=["Title"], inplace=True)
-
-    # Convertendo a string de ingredientes em uma lista de verdade
-    # Isso é importante para que a função de similaridade funcione corretamente
-    df["Cleaned_Ingredients_List"] = df["Cleaned_Ingredients"].apply(
-        lambda x: set(ast.literal_eval(str(x.lower())))
-    )
-
-    return df
-
-
 # 3. Mapear o DataFrame para a estrutura do cbrkit
 def map_dataframe_to_case_base(df: pd.DataFrame) -> cbrkit.loaders.pandas:
-    # Mapeamos as colunas do DataFrame para os conceitos de "problema" e "solução"
-    # O loader do cbrkit cuida da criação da base de casos
     return cbrkit.loaders.pandas(df)
 
 
 # 4. Executar a recuperação de casos
 def perform_retrieval(case_base: cbrkit.loaders.pandas) -> None:
     similarity_func = cbrkit.sim.attribute_value(
-        attributes={"Cleaned_Ingredients_List": custom_ingredient_similarity},
+        attributes={
+            "Literal_Ingredients_List": custom_ingredient_similarity,
+        },
         aggregator=cbrkit.sim.aggregator(pooling="mean"),
     )
 
@@ -86,9 +72,19 @@ def perform_retrieval(case_base: cbrkit.loaders.pandas) -> None:
         limit=RESULT_LIMIT,
     )
 
-    query_ingredients = {"bread", "cheese", "lettuce", "meat", "tomato"}
+    query_ingredients = {
+        "finely ground black pepper",
+        "egg whites",
+        "finely chopped thyme",
+        "kosher salt",
+        "finely chopped parsley",
+        "finely chopped rosemary",
+        "new potatoes",
+    }
 
-    query = {"Cleaned_Ingredients_List": query_ingredients}
+    query = {
+        "Literal_Ingredients_List": query_ingredients,
+    }
     print(f"Buscando receitas com os ingredientes: {query_ingredients}\n")
 
     retrieved_cases = cbrkit.retrieval.apply_query(
@@ -107,68 +103,6 @@ def perform_retrieval(case_base: cbrkit.loaders.pandas) -> None:
 
         print(position, case_result.to_string())
         position += 1
-
-
-# 5. Avaliar o sistema com o método Leave-One-Out
-def evaluate_with_leave_one_out(
-    casebase: cbrkit.loaders.pandas, sample_size: int = 100
-) -> None:
-    print(
-        f"\n{'=' * 40} Iniciando Avaliação Leave-One-Out (amostra de {sample_size} casos) {'=' * 40}\n"
-    )
-
-    similarity_func = cbrkit.sim.attribute_value(
-        attributes={"Cleaned_Ingredients_List": custom_ingredient_similarity},
-        aggregator=cbrkit.sim.aggregator(pooling="mean"),
-    )
-
-    correct_predictions = 0
-
-    # Para não demorar muito, vamos testar com uma amostra da base de casos
-    # Pega os primeiros `sample_size` IDs da base de casos para o teste
-    case_ids_to_test = list(casebase.keys())[:sample_size]
-
-    for i, case_id_to_hold_out in enumerate(case_ids_to_test):
-        print(f"Testando caso {i+1}/{sample_size}...")
-
-        # a. Separa o caso de teste (holdout)
-        holdout_case = casebase[case_id_to_hold_out]
-        print(holdout_case)
-        query = holdout_case["problem"]
-        correct_solution_title = holdout_case["solution"]["Title"]
-
-        # b. Cria a base de casos para o teste (todos exceto o holdout)
-        test_casebase = {
-            key: value for key, value in casebase.items() if key != case_id_to_hold_out
-        }
-
-        # c. Constrói o recuperador para a base de teste, buscando apenas o caso mais similar
-        retriever = cbrkit.retrieval.build(
-            casebase=test_casebase,
-            similarity_func=similarity_func,
-            limit=1,
-        )
-
-        # d. Executa a recuperação
-        retrieved_result = retriever(query)
-
-        # e. Compara a solução
-        if retrieved_result:
-            retrieved_case_id = next(iter(retrieved_result))
-            retrieved_solution_title = retrieved_result[retrieved_case_id]["solution"][
-                "Title"
-            ]
-
-            if retrieved_solution_title == correct_solution_title:
-                correct_predictions += 1
-
-    # f. Calcula e exibe a acurácia final
-    accuracy = (correct_predictions / sample_size) * 100
-    print("\n-------------------- Resultado da Avaliação --------------------")
-    print(f"Casos testados: {sample_size}")
-    print(f"Previsões corretas: {correct_predictions}")
-    print(f"Acurácia do sistema: {accuracy:.2f}%")
-    print("----------------------------------------------------------------")
 
 
 # ===================================== APP ===================================== #
@@ -192,7 +126,7 @@ def main() -> None:
     perform_retrieval(case_base)
 
     # Passo 5: Avaliar o sistema com Leave-One-Out
-    evaluate_with_leave_one_out(case_base, sample_size=200)
+    evaluate_with_leave_one_out(case_base, sample_size=50)
 
     print(f"\n{'=' * 40} Fim do processamento {'=' * 40}\n")
 

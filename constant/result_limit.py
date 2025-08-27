@@ -1,0 +1,1 @@
+RESULT_LIMIT = 10
