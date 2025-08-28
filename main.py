@@ -7,7 +7,9 @@ import cbrkit.loaders
 from constant.result_limit import RESULT_LIMIT
 from evaluation.evaluate_with_leave_one_out import evaluate_with_leave_one_out
 from helpers.clean_data import clean_data
-from sim_functions.custom_ingredient_similarity import custom_ingredient_similarity
+
+# Importa a nova classe de similaridade TF-IDF
+from sim_functions.tfidf_similarity import TFIDFSimilarity
 
 
 # ===================================== CONSTANTES ===================================== #
@@ -25,6 +27,8 @@ class Recipe(TypedDict):
     Image_Name: str
     Cleaned_Ingredients: list[str]
     Literal_Ingredients_List: set[str]
+    Processed_Ingredients: set[str]  # Adicionado para clareza
+    Ingredient_String: str  # Adicionado para clareza
 
 
 class CaseResult:
@@ -42,7 +46,7 @@ class CaseResult:
 # 1. Carregar o dataset
 def load_data_set() -> pd.DataFrame:
     try:
-        df = pd.read_csv(DATASET_FILE)
+        df = pd.read_csv(DATASET_FILE)  # Usar Id como índice
         return df
     except FileNotFoundError:
         print(
@@ -53,18 +57,12 @@ def load_data_set() -> pd.DataFrame:
 
 # 3. Mapear o DataFrame para a estrutura do cbrkit
 def map_dataframe_to_case_base(df: pd.DataFrame) -> cbrkit.loaders.pandas:
+    # O loader do cbrkit usa o índice do DataFrame como chave do caso
     return cbrkit.loaders.pandas(df)
 
 
 # 4. Executar a recuperação de casos
-def perform_retrieval(case_base: cbrkit.loaders.pandas) -> None:
-    similarity_func = cbrkit.sim.attribute_value(
-        attributes={
-            "Literal_Ingredients_List": custom_ingredient_similarity,
-        },
-        aggregator=cbrkit.sim.aggregator(pooling="mean"),
-    )
-
+def perform_retrieval(case_base: cbrkit.loaders.pandas, similarity_func) -> None:
     retriever = cbrkit.retrieval.dropout(
         cbrkit.retrieval.build(
             similarity_func=similarity_func,
@@ -73,13 +71,11 @@ def perform_retrieval(case_base: cbrkit.loaders.pandas) -> None:
     )
 
     query_ingredients = {
-        "finely ground black pepper",
-        "egg whites",
-        "finely chopped thyme",
-        "kosher salt",
-        "finely chopped parsley",
-        "finely chopped rosemary",
-        "new potatoes",
+        "cup of chopped tomatoes",
+        "salt to taste",
+        "cup of olive oil",
+        "cloves of garlic",
+        "teaspoon of sugar",
     }
 
     query = {
@@ -92,17 +88,17 @@ def perform_retrieval(case_base: cbrkit.loaders.pandas) -> None:
     )
 
     print(f"Top {RESULT_LIMIT} receitas recomendadas:")
-    result = retrieved_cases.final_step
-    matched_cases = result.casebase.items()
+    matched_cases = retrieved_cases.casebase.items()
     position = 1
 
-    for case in matched_cases:
+    for key, case in matched_cases:
         case_result = CaseResult(
-            case=Recipe(**case[1]), similarity=result.similarities[case[0]].value
+            case=Recipe(**case), similarity=retrieved_cases.similarities[key]
         )
 
         print(position, case_result.to_string())
         position += 1
+
 
 
 # ===================================== APP ===================================== #
@@ -119,14 +115,16 @@ def main() -> None:
     # Passo 3: Criar a base de casos usando o loader
     case_base = map_dataframe_to_case_base(df_cleaned)
     print("Base de casos criada com sucesso!")
-    print(f"Número de casos na base: {len(case_base)}")
-    print(f"Um caso de exemplo seria: {list(case_base.items())[0][1]}")
 
-    # Passo 4: Executar a recuperação de casos
-    perform_retrieval(case_base)
+    # Passo 4: Inicializar o modelo de similaridade TF-IDF
+    # O modelo é treinado uma vez com todos os dados
+    tfidf_similarity_calculator = TFIDFSimilarity(df_cleaned)
 
-    # Passo 5: Avaliar o sistema com Leave-One-Out
-    evaluate_with_leave_one_out(case_base, sample_size=50)
+    # Passo 5: Executar a recuperação de casos
+    perform_retrieval(case_base, tfidf_similarity_calculator)
+
+    # Passo 6: Avaliar o sistema com Leave-One-Out
+    # evaluate_with_leave_one_out(case_base, tfidf_similarity_calculator, sample_size=200)
 
     print(f"\n{'=' * 40} Fim do processamento {'=' * 40}\n")
 

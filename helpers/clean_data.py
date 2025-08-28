@@ -75,11 +75,16 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     Função de limpeza, com remoção de stopwords e stemming.
     """
     # Evita o uso de inplace=True para maior segurança e previsibilidade
-    df_cleaned = df.replace("", pd.NA).dropna(how="any")
+    df_cleaned = df.replace("", pd.NA).dropna(how="any").copy()
 
     # Aplica a função de processamento robusta na coluna de ingredientes
-    df_cleaned["Literal_Ingredients_List"] = df_cleaned[
+    df_cleaned["Processed_Ingredients"] = df_cleaned[
         "Literal_Ingredients_List"
     ].apply(normalize_ingredients)
+
+    # Cria uma nova coluna com os ingredientes como uma única string para o TF-IDF
+    df_cleaned["Ingredient_String"] = df_cleaned["Processed_Ingredients"].apply(
+        lambda s: " ".join(s)
+    )
 
     return df_cleaned
